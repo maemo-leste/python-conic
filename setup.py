@@ -2,6 +2,7 @@ from distutils.core import setup, Extension
 from distutils.command.build import build
 from distutils.command.install import install
 from distutils.cmd import Command
+from dsextras import getoutput
 import subprocess
 import os
 import sys
@@ -39,7 +40,8 @@ def get_includes(package_name):
     return []
 
 def get_conic_version():
-    input = open('/usr/lib/pkgconfig/conic.pc','r')
+    from glob import glob
+    input = open(glob('/usr/lib/*/pkgconfig/conic.pc')[0],'r')
 
     for line in input:
         result = line.split()
@@ -48,6 +50,7 @@ def get_conic_version():
                 raw_version = result[-1]
 
     input.close()
+    raw_version = raw_version.split('+')[0]
     conic_version = tuple([ int(x) for x in raw_version.split('.') ])
     return conic_version
 conic_version = get_conic_version()
@@ -145,14 +148,6 @@ class PyConicDocBuild(Command):
         subprocess.call(['xsltproc'] + xslt_args)
         return True
 
-class PyConicInstall(install):
-    def run(self):
-        # Workaround for scratchbox bug where LD_PRELOAD components are
-        # separated by commas and not by colons as they should be.
-        os.environ['LD_PRELOAD'] = os.environ['SBOX_PRELOAD'].replace(',',':')
-
-        install.run(self)
-
 compile_args = [
         '-Os',
         '-DXTHREADS',
@@ -164,6 +159,10 @@ compile_args = [
 #        '-rdynamic',
 ]
 
+include_flags = getoutput('pkg-config --cflags conic dbus-1 dbus-glib-1 glib-2.0 gobject-2.0 pygtk-2.0').split(' ')
+compile_args.extend(include_flags)
+
+
 # Using get_includes plus pygtk headers
 conic = Extension('conic',
     sources = [
@@ -174,18 +173,10 @@ conic = Extension('conic',
     libraries = [
         'conic',
         'dbus-1',
-                'dbus-glib-1',
-                'glib-2.0',
-                'gobject-2.0',
+	'dbus-glib-1',
+	'glib-2.0',
+	'gobject-2.0',
     ],
-    include_dirs = [
-        '/usr/include/conic',
-        '/usr/include/dbus-1.0',
-        '/usr/lib/dbus-1.0/include',
-        '/usr/include/glib-2.0',
-        '/usr/lib/glib-2.0/include',
-        '/usr/include/pygtk-2.0',
-    ],    
     extra_compile_args=compile_args,
 )
 
@@ -200,7 +191,7 @@ setup(
     cmdclass={
         'build': PyConicBuild,
         'build_doc': PyConicDocBuild,
-        'install': PyConicInstall
+        'install': install,
     }
 )
 # vim:ts=4:sw=4:et:
